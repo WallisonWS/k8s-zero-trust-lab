@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>K8s Zero-Trust Lab — NetworkPolicy Builder &amp; CIS Pod Security Auditor</title>
+  <style>
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:'Inter',system-ui,sans-serif; background:#060a14; color:#f8fafc; min-height:100vh; padding:26px 18px; background-image:radial-gradient(circle at 12% 0%,rgba(50,108,229,0.16),transparent 40%),radial-gradient(circle at 88% 8%,rgba(16,185,129,0.12),transparent 40%); }
+    .wrap { max-width:1140px; margin:0 auto; }
+    .hero { background:linear-gradient(135deg,rgba(50,108,229,0.18),rgba(14,165,233,0.14)); border:1px solid rgba(50,108,229,0.45); border-radius:16px; padding:24px 28px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; }
+    .hero h1 { font-size:1.65rem; font-weight:800; margin-bottom:6px; }
+    .hero p { color:#94a3b8; font-size:0.9rem; max-width:680px; }
+    .btn { background:linear-gradient(135deg,#326ce5,#0ea5e9); color:#fff; border:none; padding:9px 16px; border-radius:9px; font-weight:700; cursor:pointer; font-size:0.83rem; text-decoration:none; }
+    .btn-ghost { background:#0f172a; border:1px solid #26334d; color:#e2e8f0; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(450px,1fr)); gap:18px; }
+    .card { background:#0f1626; border:1px solid #23304d; border-radius:14px; padding:20px; margin-bottom:18px; }
+    .card h2 { font-size:0.98rem; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+    .row { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:10px; }
+    label { font-size:0.78rem; color:#94a3b8; font-weight:600; display:block; margin-bottom:4px; }
+    input, textarea { width:100%; background:#080d18; border:1px solid #23304d; color:#f1f5f9; border-radius:8px; padding:9px 11px; font-family:Consolas,monospace; font-size:0.82rem; }
+    pre { background:#080d18; border:1px solid #23304d; border-radius:8px; padding:14px; font-family:Consolas,monospace; font-size:0.8rem; color:#7dd3fc; white-space:pre-wrap; max-height:330px; overflow:auto; }
+    .hit { display:flex; justify-content:space-between; align-items:center; background:#080d18; border:1px solid #1e293b; padding:8px 12px; border-radius:8px; margin-bottom:7px; font-size:0.81rem; }
+    .crit { background:rgba(239,68,68,0.2); color:#f87171; padding:2px 8px; border-radius:999px; font-size:0.7rem; font-weight:800; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <h1>☁️ K8s Zero-Trust &amp; Cloud Security Lab (GKE / EKS / AKS)</h1>
+        <p>Visual <strong>Kubernetes Zero-Trust NetworkPolicy Generator</strong> + real-time <strong>CIS Pod Security Standards Auditor</strong> detecting privileged containers, root users &amp; missing securityContext controls.</p>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a href="https://github.com/WallisonWS/k8s-zero-trust-lab" target="_blank" class="btn">⭐ Star on GitHub</a>
+        <a href="https://github.com/WallisonWS" target="_blank" class="btn btn-ghost">@WallisonWS</a>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>
+          <span>🛡️ Zero-Trust NetworkPolicy Generator</span>
+          <button class="btn" onclick="navigator.clipboard.writeText(document.getElementById('npOut').textContent)">📋 Copy YAML</button>
+        </h2>
+        <div class="row">
+          <div><label>Namespace</label><input id="kNs" value="payments-prod" /></div>
+          <div><label>Target App Label</label><input id="kApp" value="checkout-api" /></div>
+          <div><label>Allowed Caller Label</label><input id="kFrom" value="api-gateway" /></div>
+          <div><label>Allowed Port (TCP)</label><input id="kPort" value="8080" /></div>
+        </div>
+        <pre id="npOut"></pre>
+      </div>
+
+      <div class="card">
+        <h2>
+          <span>🔎 CIS Pod Security Auditor (<span id="kScore" style="color:#f87171;">Score: 15/100</span>)</span>
+        </h2>
+        <textarea id="kYamlIn" rows="8">apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      hostNetwork: true
+      containers:
+        - name: api
+          image: myrepo/api:latest
+          securityContext:
+            privileged: true</textarea>
+        <div id="kHits" style="margin-top:12px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function renderNp() {
+      const ns = document.getElementById('kNs').value, app = document.getElementById('kApp').value, from = document.getElementById('kFrom').value, port = document.getElementById('kPort').value;
+      document.getElementById('npOut').textContent = `apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: zero-trust-${app}
+  namespace: ${ns}
+spec:
+  podSelector:
+    matchLabels:
+      app: ${app}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ${from}
+      ports:
+        - protocol: TCP
+          port: ${port}
+  egress:
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53 # Allow CoreDNS only (Default-Deny all other egress)`;
+    }
+
+    function auditK8s() {
+      const y = document.getElementById('kYamlIn').value;
+      const rules = [
+        ['Privileged Container (privileged: true)', 'CRITICAL', 30, /privileged:\s*true/i.test(y)],
+        ['HostNetwork / HostPID Exposed', 'CRITICAL', 25, /host(Network|PID|IPC):\s*true/i.test(y)],
+        ['Mutable :latest Image Tag', 'MEDIUM', 10, /image:\s*[^\s]+:latest\b/i.test(y)],
+        ['Missing runAsNonRoot: true', 'HIGH', 15, !/runAsNonRoot:\s*true/i.test(y)],
+        ['Missing readOnlyRootFilesystem: true', 'MEDIUM', 10, !/readOnlyRootFilesystem:\s*true/i.test(y)],
+        ['Missing allowPrivilegeEscalation: false', 'HIGH', 15, !/allowPrivilegeEscalation:\s*false/i.test(y)]
+      ];
+      const fails = rules.filter(r => r[3]);
+      const score = Math.max(0, 100 - fails.reduce((a, r) => a + r[2], 0));
+      const scEl = document.getElementById('kScore');
+      scEl.textContent = `CIS Score: ${score}/100`;
+      scEl.style.color = score >= 80 ? '#34d399' : score >= 50 ? '#fbbf24' : '#f87171';
+      document.getElementById('kHits').innerHTML = fails.length
+        ? fails.map(f => `<div class="hit"><span>${f[0]}</span><span class="crit">${f[1]}</span></div>`).join('')
+        : '<div class="hit" style="color:#34d399;">✅ Passes CIS Restricted Pod Security Standards!</div>';
+    }
+
+    ['kNs','kApp','kFrom','kPort'].forEach(id => document.getElementById(id).addEventListener('input', renderNp));
+    document.getElementById('kYamlIn').addEventListener('input', auditK8s);
+    renderNp(); auditK8s();
+  </script>
+</body>
+</html>
